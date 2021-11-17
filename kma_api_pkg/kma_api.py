@@ -37,7 +37,7 @@ class ASOS:
     Methods
     ================================================================
     run()
-        DataFrame 형태의 기상청 예보 데이터 출력
+        DataFrame 형태의 기상청 ASOS 데이터 출력
     """
     def __init__(self, startDt, startHh, endDt, endHh, stnIds, key = key):
         self.startDt = startDt
