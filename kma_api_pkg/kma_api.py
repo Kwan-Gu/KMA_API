@@ -1,12 +1,55 @@
 # IMPORT: 필요한 패키지 및 모듈
 import json
 import pandas as pd
+import datetime as dt
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode, quote_plus
 
 # SET: API 서비스 인증키 발급
 key = open('key_백관구.txt').read()
 
+# 초단기실황(단기예보)
+class UltraSrtNcst:
+    def __init__(self, base_date, base_time, nx, ny, key = key):
+        self.base_date = base_date
+        self.base_time = base_time
+        self.nx        = nx
+        self.ny        = ny
+        self.key       = key
+        self.url       = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
+    
+    def _get_json(self):
+        query = f"?{quote_plus('ServiceKey')}={self.key}&" +\
+         urlencode({quote_plus('pageNo')    : '1',\
+					quote_plus('numOfRows') : '8',\
+					quote_plus('dataType')  : 'JSON',\
+					quote_plus('base_date') : str(self.base_date),\
+					quote_plus('base_time') : str(self.base_time),\
+					quote_plus('nx')        : str(self.nx),\
+					quote_plus('ny')        : str(self.ny)})
+        request = Request(self.url + query)
+        request.get_method = lambda: 'GET'
+        content = urlopen(request).read().decode('utf-8')
+        return content
+
+    def _to_df(self, json_content):
+        json_content = json.loads(json_content)['response']
+        header = json_content['header']
+        if header['resultMsg'] == 'NORMAL_SERVICE': pass
+        else: raise InterruptedError(f"resultCode: {header['resultCode']}, resultMsg: {header['resultMsg']}")
+        df_content = pd.DataFrame(json_content['body']['items']['item'])
+        df_content['tm'] = df_content.apply(lambda x: dt.datetime.strptime(x['baseDate'] + x['baseTime'], '%Y%m%d%H%M'), axis = 1)
+        df = df_content.pivot_table(values = 'obsrValue', index = 'tm', columns = 'category', aggfunc = 'first')
+        df['nx'] = self.nx
+        df['ny'] = self.ny
+        df.reset_index(inplace = True)
+        df.columns.name = None
+        return df[['tm', 'nx', 'ny', 'T1H', 'RN1', 'UUU', 'VVV', 'REH', 'PTY', 'VEC', 'WSD']]
+
+    def run(self):
+        return self._to_df(self._get_json())
+
+# 종관기상관측
 class ASOS:
     """
     Description
@@ -70,12 +113,11 @@ class ASOS:
         header = json_content['header']
         if header['resultMsg'] == 'NORMAL_SERVICE': pass
         else: raise InterruptedError(f"resultCode: {header['resultCode']}, resultMsg: {header['resultMsg']}")
-        df_content = pd.DataFrame(json_content['body']['items']['item'])
-        return df_content
+        df = pd.DataFrame(json_content['body']['items']['item'])
+        return df
 
     def run(self):
         return self._to_df(self._get_json())
-
 
 # 서비스 종료됨(단기예보로 변경해야 함)
 class Forecast:
